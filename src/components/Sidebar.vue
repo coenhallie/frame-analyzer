@@ -1,11 +1,15 @@
 <script setup>
 import { ref } from "vue";
 
+import ChangelogModal from "./ChangelogModal.vue";
+
 defineProps({
   currentPage: String
 });
 
 defineEmits(['navigate']);
+
+const isChangelogOpen = ref(false);
 
 const menuItems = [
   { name: "Dashboard", icon: "🏠" },
@@ -24,7 +28,7 @@ const userParams = {
       <div class="logo-text">
         <div class="title-row">
           <h1>Video Analyzer</h1>
-          <span class="version-badge">alpha 0.1</span>
+          <span class="version-badge" @click="isChangelogOpen = true">alpha 0.1</span>
         </div>
       </div>
     </div>
@@ -42,6 +46,8 @@ const userParams = {
         <span class="label">{{ item.name }}</span>
       </a>
     </nav>
+
+    <ChangelogModal :is-open="isChangelogOpen" @close="isChangelogOpen = false" />
   </aside>
 </template>
 
@@ -190,5 +196,11 @@ const userParams = {
   border: 1px solid rgba(20, 184, 166, 0.2);
   text-transform: uppercase;
   line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.version-badge:hover {
+  background: rgba(20, 184, 166, 0.25);
 }
 </style>
