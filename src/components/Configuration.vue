@@ -12,7 +12,7 @@ onMounted(() => {
   }
 
   const envModel = import.meta.env.VITE_OPENROUTER_MODEL;
-  if (envModel && modelName.value === 'google/gemini-2.0-flash-exp:free') {
+  if (envModel && modelName.value === 'google/gemini-3-flash-preview') {
     modelName.value = envModel;
   }
 });
@@ -48,7 +48,7 @@ onMounted(() => {
         <input
           v-model="modelName"
           type="text"
-          placeholder="google/gemini-2.0-flash-exp:free"
+          placeholder="google/gemini-3-flash-preview"
         />
       </div>
 

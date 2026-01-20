@@ -22,7 +22,10 @@ const userParams = {
   <aside class="sidebar">
     <div class="logo-area">
       <div class="logo-text">
-        <h1>Video Analyzer</h1>
+        <div class="title-row">
+          <h1>Video Analyzer</h1>
+          <span class="version-badge">alpha 0.1</span>
+        </div>
       </div>
     </div>
 
@@ -167,5 +170,25 @@ const userParams = {
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: 1.1rem;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.version-badge {
+  font-size: 0.65rem;
+  background: rgba(20, 184, 166, 0.15);
+  color: var(--color-accent);
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(20, 184, 166, 0.2);
+  text-transform: uppercase;
+  line-height: 1;
 }
 </style>

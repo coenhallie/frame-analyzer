@@ -21,6 +21,8 @@ const uploadedVideoUrl = ref(null);
 const videoFileName = ref("");
 const isGeneratingPdf = ref(false);
 const isCopying = ref(false);
+const videoPlayer = ref(null);
+
 
 
 const handleDragEnter = (e) => {
@@ -195,8 +197,10 @@ const callOpenRouter = async (content) => {
     }
 
     if (data.choices && data.choices[0] && data.choices[0].message) {
-      analysisResult.value = md.render(data.choices[0].message.content);
+      const rawContent = data.choices[0].message.content;
+      analysisResult.value = processAnalysisContent(md.render(rawContent));
     } else {
+
       throw new Error("Unexpected response format");
     }
   } catch (err) {
@@ -204,6 +208,12 @@ const callOpenRouter = async (content) => {
   } finally {
     analyzing.value = false;
   }
+};
+
+const formatTime = (seconds) => {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
 const analyzeSummary = async () => {
@@ -214,7 +224,10 @@ const analyzeSummary = async () => {
   analysisResult.value = "";
 
   const prompt =
-    "Analyze this sequence of video frames and provide a detailed chronological summary of the events taking place. Describe the visual content, actions, and any text visible. Be concise but thorough.";
+    "Analyze this sequence of video frames and provide a detailed chronological summary of the events taking place. " +
+    "I have provided the specific timestamp for each frame. " +
+    "PLEASE USE THESE PROVIDED TIMESTAMPS explicitly in your summary (e.g. 'At 0:05...') to reference events, rather than trying to read clocks in the video. " +
+    "Describe the visual content, actions, and any text visible. Be concise but thorough.";
 
   const content = [{ type: "text", text: prompt }];
 
@@ -222,9 +235,14 @@ const analyzeSummary = async () => {
   const step =
     frames.value.length > 30 ? Math.ceil(frames.value.length / 30) : 1;
   for (let i = 0; i < frames.value.length; i += step) {
+    const frameParams = frames.value[i];
+    content.push({
+      type: "text",
+      text: `Timestamp: ${formatTime(frameParams.time)}`,
+    });
     content.push({
       type: "image_url",
-      image_url: { url: frames.value[i].src },
+      image_url: { url: frameParams.src },
     });
   }
 
@@ -332,6 +350,97 @@ const copySummary = async () => {
   }
 };
 
+const processAnalysisContent = (html) => {
+  // Matches MM:SS or M:SS format (e.g., 10:05, 1:30)
+  const timeFormat1 = /\b(\d{1,2}):(\d{2})\b/g;
+  
+  // Matches Xs or XXs format (e.g., 5s, 10s)
+  const timeFormat2 = /\b(\d+(?:\.\d+)?)s\b/g;
+
+  let processed = html;
+  
+  // Get video duration if available
+  const video = videoPlayer.value;
+  const duration = video && isFinite(video.duration) ? video.duration : Infinity;
+
+  // Handle MM:SS format with context-aware fallback
+  processed = processed.replace(timeFormat1, (match, part1, part2) => {
+    let seconds = parseInt(part1, 10) * 60 + parseInt(part2, 10);
+    
+    // Heuristic: If MM:SS is out of bounds (and video is loaded),
+    // check if interpreting as SS:MS (Seconds:Centiseconds) works.
+    // Example: "30:49" in a 33s video. 
+    // MM:SS = 1849s (out of bounds)
+    // SS:MS = 30.49s (valid)
+    if (seconds > duration) {
+       const altSeconds = parseInt(part1, 10) + parseInt(part2, 10) / 100;
+       if (altSeconds <= duration) {
+         console.log(`Timestamp ambiguity resolved: "${match}" interpreted as ${altSeconds}s instead of ${seconds}s`);
+         seconds = altSeconds;
+       }
+    }
+
+    return `<span class="timestamp-link" data-time="${seconds}">${match}</span>`;
+  });
+
+  // Handle Xs format
+  processed = processed.replace(timeFormat2, (match, sec) => {
+    const totalSeconds = parseFloat(sec);
+    return `<span class="timestamp-link" data-time="${totalSeconds}">${match}</span>`;
+  });
+
+  return processed;
+};
+
+const handleAnalysisClick = (e) => {
+  const target = e.target;
+  const link = target.closest('.timestamp-link');
+  
+  if (link) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Debug logging
+    console.log('Timestamp clicked:', link.innerText);
+    console.log('Raw data-time:', link.dataset.time);
+    
+    const time = parseFloat(link.dataset.time);
+    const video = videoPlayer.value;
+    
+    if (video) {
+      console.log('Seeking to:', time, 'Duration:', video.duration);
+      
+      // Validate time
+      if (!isFinite(time)) {
+        console.error('Invalid time parsed');
+        return;
+      }
+
+      // Only clamp if strictly necessary (e.g. time is past duration)
+      // defaulting to time if duration is not available/finite
+      let targetTime = time;
+      if (isFinite(video.duration)) {
+        if (targetTime >= video.duration) {
+            // If strictly past the end, clamp to slightly before end
+            targetTime = Math.max(0, video.duration - 0.1); 
+        }
+      }
+
+      video.currentTime = targetTime;
+      
+      // Attempt to play, but catch errors safely
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn("Auto-play failed (likely need user interaction first):", error);
+        });
+      }
+    } else {
+      console.error('Video player reference missing');
+    }
+  }
+};
+
 const hasActiveAnalysis = computed(() => {
   return (
     analyzing.value || (analysisResult.value && analysisResult.value.length > 0)
@@ -366,6 +475,7 @@ const hasActiveAnalysis = computed(() => {
 
       <div v-else-if="uploadedVideoUrl" class="video-preview">
         <video 
+          ref="videoPlayer"
           :src="uploadedVideoUrl" 
           controls 
           class="uploaded-video"
@@ -382,7 +492,10 @@ const hasActiveAnalysis = computed(() => {
     </div>
 
     <div v-if="frames.length > 0" class="analysis-section">
-      <h2>AI Analysis</h2>
+      <h2>
+        AI Analysis
+        <span class="model-badge">{{ modelName }}</span>
+      </h2>
 
         <div class="controls-wrapper">
          <button
@@ -457,7 +570,7 @@ const hasActiveAnalysis = computed(() => {
           </div>
         </div>
 
-      <div v-if="analysisResult" class="result-box">
+      <div v-if="analysisResult" class="result-box" @click="handleAnalysisClick">
         <div v-html="analysisResult" class="markdown-content"></div>
       </div>
     </div>
@@ -671,6 +784,22 @@ const hasActiveAnalysis = computed(() => {
   font-family: var(--font-primary);
   font-weight: 600;
   font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.model-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono, monospace);
+  text-transform: none;
 }
 
 
@@ -796,6 +925,23 @@ const hasActiveAnalysis = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+:deep(.timestamp-link) {
+  color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.1);
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  border-bottom: 1px dashed var(--color-primary);
+}
+
+:deep(.timestamp-link):hover {
+  background: var(--color-primary);
+  color: white;
+  text-decoration: none;
 }
 
 /* Markdown Rendering */

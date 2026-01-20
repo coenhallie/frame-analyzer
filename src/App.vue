@@ -22,7 +22,7 @@ const navigateTo = (page) => {
         <div class="breadcrumbs">
           <div v-if="totalSessionCost > 0" class="cost-display">
             <span class="label">Session Cost:</span>
-            <span class="value">${{ totalSessionCost.toFixed(5) }}</span>
+            <span class="value">£{{ totalSessionCost.toFixed(5) }}</span>
           </div>
         </div>
       </header>
@@ -48,6 +48,7 @@ const navigateTo = (page) => {
   --color-bg-darker: #020617; /* Slate 950 */
 
   --color-primary: #14b8a6; /* Teal 500 */
+  --color-primary-rgb: 20, 184, 166;
   --color-primary-hover: #0d9488; /* Teal 600 */
   --color-accent: #2dd4bf; /* Teal 400 */
 
