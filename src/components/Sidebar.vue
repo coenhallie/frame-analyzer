@@ -28,7 +28,7 @@ const userParams = {
       <div class="logo-text">
         <div class="title-row">
           <h1>Video Analyzer</h1>
-          <span class="version-badge" @click="isChangelogOpen = true">alpha 0.1</span>
+          <span class="version-badge" @click="isChangelogOpen = true">alpha 0.2</span>
         </div>
       </div>
     </div>

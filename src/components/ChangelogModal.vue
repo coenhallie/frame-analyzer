@@ -18,6 +18,15 @@ defineEmits(['close']);
         <div class="modal-body">
           <div class="version-entry">
             <div class="version-header">
+              <h3>Version 0.2 (Alpha)</h3>
+              <span class="date">Jan 21, 2026</span>
+            </div>
+            <ul>
+              <li>Add game events.</li>
+            </ul>
+          </div>
+          <div class="version-entry">
+            <div class="version-header">
               <h3>Version 0.1 (Alpha)</h3>
               <span class="date">Jan 20, 2026</span>
             </div>
