@@ -1,21 +1,17 @@
 <script setup>
 import { useConfig } from '../composables/useConfig';
-import { onMounted } from 'vue';
+import { ref } from 'vue';
 
-const { apiKey, modelName, useEnvKey, framesPerSecond } = useConfig();
+const { apiKey, modelName, framesPerSecond, saveSettings } = useConfig();
+const saveStatus = ref('');
 
-onMounted(() => {
-  const envKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-  if (envKey && !apiKey.value) {
-    useEnvKey.value = true;
-    apiKey.value = envKey;
-  }
-
-  const envModel = import.meta.env.VITE_OPENROUTER_MODEL;
-  if (envModel && modelName.value === 'google/gemini-3-flash-preview') {
-    modelName.value = envModel;
-  }
-});
+const handleSave = () => {
+  saveSettings();
+  saveStatus.value = 'Saved!';
+  setTimeout(() => {
+    saveStatus.value = '';
+  }, 2000);
+};
 </script>
 
 <template>
@@ -26,20 +22,15 @@ onMounted(() => {
       <!-- API Key Section -->
       <div class="input-group">
         <label>OpenRouter API Key</label>
-        <div class="key-input-wrapper">
-          <input
-            v-if="!useEnvKey"
-            v-model="apiKey"
-            type="password"
-            placeholder="sk-or-..."
-            class="api-input"
-          />
-          <div v-else class="env-badge">Using .env API Key</div>
-        </div>
-        <label class="checkbox-label">
-          <input type="checkbox" v-model="useEnvKey" />
-          Use .env API Key
-        </label>
+        <input
+          v-model="apiKey"
+          type="password"
+          placeholder="sk-or-..."
+          class="api-input"
+        />
+        <p class="help-text">
+          Your API key is stored locally in your browser and never sent to our servers.
+        </p>
       </div>
 
       <!-- Model Section -->
@@ -48,7 +39,7 @@ onMounted(() => {
         <input
           v-model="modelName"
           type="text"
-          placeholder="google/gemini-3-flash-preview"
+          placeholder="google/gemini-2.0-flash-exp"
         />
       </div>
 
@@ -69,6 +60,17 @@ onMounted(() => {
         <p class="help-text">
           Higher FPS = more detailed analysis but higher cost/processing time.
         </p>
+      </div>
+
+      <!-- Save Button -->
+      <div class="action-row">
+        <button 
+          class="save-btn" 
+          @click="handleSave" 
+          :class="{ 'saved': saveStatus === 'Saved!' }"
+        >
+          {{ saveStatus || 'Save Settings' }}
+        </button>
       </div>
     </div>
   </div>
@@ -131,38 +133,6 @@ h2 {
   box-shadow: 0 0 0 1px var(--color-primary);
 }
 
-.key-input-wrapper {
-  display: flex;
-  gap: 1rem;
-}
-
-.env-badge {
-  flex: 1;
-  padding: 1rem;
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--color-success);
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  text-align: center;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  cursor: pointer;
-  margin-top: 0.5rem;
-}
-
-input[type="checkbox"] {
-  accent-color: var(--color-primary);
-  width: 1rem;
-  height: 1rem;
-}
-
 .label-row {
   display: flex;
   justify-content: space-between;
@@ -186,12 +156,45 @@ input[type="checkbox"] {
   height: 6px;
   background: var(--color-bg-darker);
   border-radius: 999px;
-  appearance: auto; /* Let browser handle basic slider style for now, acccent-color does heavy lifting */
+  appearance: auto;
 }
 
 .help-text {
   font-size: 0.8rem;
   color: var(--color-text-muted);
   margin: 0;
+  line-height: 1.4;
+}
+
+.action-row {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.save-btn {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.save-btn:active {
+  transform: translateY(0);
+}
+
+.save-btn.saved {
+  background: var(--color-success);
+  pointer-events: none;
 }
 </style>

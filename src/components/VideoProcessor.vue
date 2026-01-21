@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
 const md = new MarkdownIt();
-const { apiKey, modelName, useEnvKey, framesPerSecond, totalSessionCost, lastAnalysisCost } = useConfig();
+const { apiKey, modelName, framesPerSecond, totalSessionCost, lastAnalysisCost } = useConfig();
 
 const isDragging = ref(false);
 const processing = ref(false);
@@ -142,14 +142,11 @@ const processFile = async (file) => {
 };
 
 const getApiKey = () => {
-  const key = useEnvKey.value
-    ? import.meta.env.VITE_OPENROUTER_API_KEY
-    : apiKey.value;
-  if (!key) {
-    error.value = "Please enter a valid OpenRouter API Key.";
+  if (!apiKey.value) {
+    error.value = "Please enter a valid OpenRouter API Key in Configuration.";
     return null;
   }
-  return key;
+  return apiKey.value;
 };
 
 const callOpenRouter = async (content) => {
@@ -1176,7 +1173,7 @@ const hasActiveAnalysis = computed(() => {
   font-size: 24px;
   font-weight: 800;
   margin: 0 0 15px 0;
-  color: #111827;
+  color: #000000;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1236,11 +1233,24 @@ const hasActiveAnalysis = computed(() => {
 .pdf-content h2 {
   font-size: 18px;
   font-weight: 700;
-  color: #111827;
+  color: #000000;
   margin-top: 0;
   margin-bottom: 15px;
   border-left: 4px solid #3b82f6;
   padding-left: 10px;
+}
+
+/* Force black color for all markdown content in PDF */
+.pdf-content :deep(.markdown-content),
+.pdf-content :deep(.markdown-content *) {
+  color: #000000 !important;
+}
+
+.pdf-content :deep(.markdown-content h1),
+.pdf-content :deep(.markdown-content h2),
+.pdf-content :deep(.markdown-content h3),
+.pdf-content :deep(.markdown-content strong) {
+  color: #000000 !important;
 }
 
 .pdf-content .markdown-content {
