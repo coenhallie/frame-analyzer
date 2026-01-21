@@ -22,6 +22,20 @@ const videoFileName = ref("");
 const isGeneratingPdf = ref(false);
 const isCopying = ref(false);
 const videoPlayer = ref(null);
+const gameStats = ref(null);
+const showGameActions = ref(false);
+
+const statConfig = {
+  "Passes": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9l6 6-6 6"/><path d="M4 4v5a8 8 0 0 0 16 0"/><path d="M4 4h0"/></svg>', label: "Passes" },
+  "Goals": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/><path d="M12 2v20"/><path d="M4.93 4.93l14.14 14.14"/><path d="M19.07 4.93L4.93 19.07"/></svg>', label: "Goals" },
+  "Shots": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>', label: "Shots" },
+  "High Balls": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7-7-7 7"/></svg>', label: "High Balls" },
+  "Low Balls": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>', label: "Low Balls" },
+  "Tackles": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 10-10"/><path d="M7 7 2 2"/><path d="M17 17l5 5"/><path d="m14 10-3-3 5-5 2 2 3-3 1 1-3 3 2 2-5 5-3-3Z"/></svg>', label: "Tackles" },
+  "Interceptions": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>', label: "Interceptions" },
+  "Crosses": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5l-8 8"/><path d="M3 3l18 18"/></svg>', label: "Crosses" },
+  "Fouls": { icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2h10"/><path d="M6 6h12"/><path d="M6 10h12"/><path d="M6 14h12"/><path d="M7 18h10"/><path d="M10 22h4"/></svg>', label: "Fouls" },
+};
 
 
 
@@ -68,6 +82,7 @@ const processFile = async (file) => {
   progress.value = 0;
   analysisResult.value = "";
   analysisType.value = "";
+  gameStats.value = null;
   videoFileName.value = file.name;
 
   const videoUrl = URL.createObjectURL(file);
@@ -141,6 +156,38 @@ const processFile = async (file) => {
   }
 };
 
+const extractGameStats = (markdown) => {
+  const stats = {};
+  const lines = markdown.split('\n');
+  const actionSectionIndex = lines.findIndex(line => line.includes('## Game Actions'));
+  
+  if (actionSectionIndex !== -1) {
+    // Process lines after the header
+    for (let i = actionSectionIndex + 1; i < lines.length; i++) {
+      const line = lines[i];
+      // Match "- Label: Value" or "- Label: approx Value" or just "- Label"
+      // Simple regex to catch the number associated with the keys
+      for (const key of Object.keys(statConfig)) {
+        if (line.toLowerCase().includes(key.toLowerCase())) {
+          const match = line.match(/(\d+)/);
+          if (match) {
+            stats[key] = parseInt(match[1]);
+          } else {
+             stats[key] = 0;
+          }
+        }
+      }
+    }
+    // Return markdown WITHOUT the actions section for display
+    return {
+      cleaned: lines.slice(0, actionSectionIndex).join('\n'),
+      stats
+    };
+  }
+  
+  return { cleaned: markdown, stats: null };
+};
+
 const getApiKey = () => {
   if (!apiKey.value) {
     error.value = "Please enter a valid OpenRouter API Key in Configuration.";
@@ -195,7 +242,15 @@ const callOpenRouter = async (content) => {
 
     if (data.choices && data.choices[0] && data.choices[0].message) {
       const rawContent = data.choices[0].message.content;
-      analysisResult.value = processAnalysisContent(md.render(rawContent));
+      
+      // Extract stats if calculating summary
+      if (analysisType.value === 'summary') {
+          const { cleaned, stats } = extractGameStats(rawContent);
+          gameStats.value = stats;
+          analysisResult.value = processAnalysisContent(md.render(cleaned));
+      } else {
+          analysisResult.value = processAnalysisContent(md.render(rawContent));
+      }
     } else {
 
       throw new Error("Unexpected response format");
@@ -218,13 +273,24 @@ const analyzeSummary = async () => {
 
   analysisType.value = "summary";
   selectedFrameTime.value = null;
-  analysisResult.value = "";
+  gameStats.value = null;
 
   const prompt =
     "Analyze this sequence of video frames and provide a detailed chronological summary of the events taking place. " +
     "I have provided the specific timestamp for each frame. " +
     "PLEASE USE THESE PROVIDED TIMESTAMPS explicitly in your summary (e.g. 'At 0:05...') to reference events, rather than trying to read clocks in the video. " +
-    "Describe the visual content, actions, and any text visible. Be concise but thorough.";
+    "Describe the visual content, actions, and any text visible. Be concise but thorough.\n\n" +
+    "Additionally, providing a separate section titled '## Game Actions' at the end of your response. " +
+    "In this section, list the estimated count of the following actions observed in the clip:\n" +
+    "- Passes\n" +
+    "- Goals\n" +
+    "- Shots\n" +
+    "- High Balls\n" +
+    "- Low Balls\n" +
+    "- Tackles\n" +
+    "- Interceptions\n" +
+    "- Crosses\n" +
+    "- Fouls";
 
   const content = [{ type: "text", text: prompt }];
 
@@ -512,6 +578,8 @@ const hasActiveAnalysis = computed(() => {
 
 
 
+
+
         <div class="action-buttons-row" v-if="analysisResult && analysisType === 'summary'">
           <button 
             class="copy-btn"
@@ -529,6 +597,25 @@ const hasActiveAnalysis = computed(() => {
             {{ isGeneratingPdf ? 'Generating PDF...' : 'Download Summary' }}
           </button>
         </div>
+
+      <div v-if="gameStats && analysisType === 'summary'" class="game-actions-container">
+        <button 
+          class="toggle-actions-btn" 
+          @click="showGameActions = !showGameActions"
+        >
+          {{ showGameActions ? 'Hide Game Actions' : 'Show Game Actions' }}
+        </button>
+        
+        <div v-if="showGameActions" class="stats-grid">
+           <div v-for="(count, key) in gameStats" :key="key" class="stat-card">
+              <div class="stat-icon" v-html="statConfig[key]?.icon"></div>
+              <div class="stat-content">
+                  <span class="stat-value">{{ count }}</span>
+                  <span class="stat-label">{{ statConfig[key]?.label }}</span>
+              </div>
+           </div>
+        </div>
+      </div>
 
         <!-- Hidden PDF Template -->
         <div class="pdf-container">
@@ -570,6 +657,7 @@ const hasActiveAnalysis = computed(() => {
       <div v-if="analysisResult" class="result-box" @click="handleAnalysisClick">
         <div v-html="analysisResult" class="markdown-content"></div>
       </div>
+      
     </div>
 
     <div v-if="frames.length > 0" class="results-area">
@@ -722,6 +810,31 @@ const hasActiveAnalysis = computed(() => {
   margin-bottom: 1rem;
 }
 
+.game-actions-container {
+  margin-top: 1rem;
+}
+
+.toggle-actions-btn {
+  width: 100%;
+  padding: 0.875rem 2rem;
+  background: var(--color-bg-surface);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.toggle-actions-btn:hover {
+  background: var(--color-bg-surface-active);
+  border-color: var(--color-text-muted);
+}
+
 .remove-video-btn {
   background: rgba(0, 0, 0, 0.5);
   color: white;
@@ -772,6 +885,8 @@ const hasActiveAnalysis = computed(() => {
   top: 2rem;
   transition: all 0.5s ease;
   z-index: 10;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
 }
 
 .analysis-section h2 {
@@ -796,7 +911,72 @@ const hasActiveAnalysis = computed(() => {
   font-weight: 500;
   letter-spacing: 0.02em;
   font-family: var(--font-mono, monospace);
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono, monospace);
   text-transform: none;
+}
+
+
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  width: 100%;
+}
+
+.stat-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+
+.stat-icon {
+  color: var(--color-primary);
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon :deep(svg) {
+  width: 20px;
+  height: 20px;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text-main);
+  margin-bottom: 0.125rem;
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 
